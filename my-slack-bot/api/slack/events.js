@@ -3,7 +3,7 @@ import crypto from "crypto";
 
 const SLACK_BOT_TOKEN      = process.env.SLACK_BOT_TOKEN;
 const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
-const ANTHROPIC_API_KEY    = process.env.ANTHROPIC_API_KEY;
+// Google Translate는 API 키 불필요!
 const BOT_USER_ID          = process.env.BOT_USER_ID;
 
 export const config = {
@@ -53,29 +53,15 @@ export default async function handler(req, res) {
   return res.status(200).end();
 }
 
-// ─── Claude API 번역 ──────────────────────────────────────
+// ─── Google Translate (무료, API 키 불필요) ───────────────
 async function translateToEnglish(text) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1000,
-      messages: [{
-        role: "user",
-        content: `Translate the following Korean Slack message to natural English.
-Return ONLY the translated text with no explanation or preamble.
-
-Korean: ${text}`,
-      }],
-    }),
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" }
   });
   const data = await res.json();
-  return data.content?.[0]?.text?.trim() || "(Translation failed)";
+  const translated = data[0]?.map(item => item[0]).join("") || "(Translation failed)";
+  return translated;
 }
 
 // ─── Slack 스레드에 번역 게시 ─────────────────────────────
