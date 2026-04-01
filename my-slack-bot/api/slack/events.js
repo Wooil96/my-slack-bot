@@ -16,16 +16,16 @@ export default async function handler(req, res) {
   // 1) Raw body 읽기 (서명 검증용)
   const rawBody = await getRawBody(req);
   
-  // 2) Slack 서명 검증
-  if (!verifySignature(req.headers, rawBody)) {
-    return res.status(403).send("Invalid signature");
-  }
-
   const body = JSON.parse(rawBody);
 
-  // 3) URL 검증 (앱 등록 시 1회)
+  // 2) URL 검증 (앱 등록 시 1회) — 서명 검증보다 먼저!
   if (body.type === "url_verification") {
-    return res.json({ challenge: body.challenge });
+    return res.status(200).json({ challenge: body.challenge });
+  }
+
+  // 3) Slack 서명 검증 (일반 이벤트에만 적용)
+  if (!verifySignature(req.headers, rawBody)) {
+    return res.status(403).send("Invalid signature");
   }
 
   // 4) 즉시 200 응답 (Slack 3초 제한 대응) ← 핵심!
