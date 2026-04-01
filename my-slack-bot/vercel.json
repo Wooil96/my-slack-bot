@@ -1,0 +1,7 @@
+{
+    "functions": {
+        "my-slack-bot/api/slack/events.js": {
+            "maxDuration": 30
+        }
+    }
+}

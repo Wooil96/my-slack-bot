@@ -66,12 +66,16 @@ export default async function handler(req, res) {
   }
 }
 
-// ─── MyMemory API 번역 (무료, API 키 불필요) ─────────────
+// ─── Google 번역 (무료, API 키 불필요) ───────────────────
 async function translateToEnglish(text) {
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ko|en`;
-  const res = await fetch(url);
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" }
+  });
   const data = await res.json();
-  return data.responseData?.translatedText || "(Translation failed)";
+  // 응답 형식: [[[번역문, 원문, ...], ...], ...]
+  const translated = data[0]?.map(item => item[0]).join("") || "(Translation failed)";
+  return translated;
 }
 
 // ─── Slack 스레드에 번역 게시 ─────────────────────────────
