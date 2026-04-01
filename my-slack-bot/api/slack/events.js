@@ -3,7 +3,7 @@ import crypto from "crypto";
 
 const SLACK_BOT_TOKEN      = process.env.SLACK_BOT_TOKEN;
 const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
-// MyMemory는 API 키 불필요!
+const ANTHROPIC_API_KEY    = process.env.ANTHROPIC_API_KEY;
 const BOT_USER_ID          = process.env.BOT_USER_ID;
 
 export const config = {
@@ -46,36 +46,38 @@ export default async function handler(req, res) {
   const hasKorean = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/.test(text);
   if (!hasKorean) return;
 
-  // waitUntil: 응답 후에도 함수가 종료되지 않고 작업 완료까지 대기
-  // Vercel의 경우 이게 없으면 res.end() 이후 함수가 바로 종료될 수 있음
-  const translationWork = (async () => {
-    try {
-      const translated = await translateToEnglish(text);
-      await postTranslation(event.channel, event.ts, translated);
-    } catch (err) {
-      console.error("번역 오류:", err);
-    }
-  })();
-
-  // Vercel Edge Runtime이라면 waitUntil 사용, 아니면 그냥 await
-  if (typeof globalThis.EdgeRuntime !== "undefined") {
-    // @ts-ignore
-    globalThis.waitUntil?.(translationWork);
-  } else {
-    await translationWork; // Node.js runtime은 await로 충분
+  // 번역 작업 실행 (완료까지 대기)
+  try {
+    const translated = await translateToEnglish(text);
+    await postTranslation(event.channel, event.ts, translated);
+  } catch (err) {
+    console.error("번역 오류:", err);
   }
 }
 
-// ─── Google 번역 (무료, API 키 불필요) ───────────────────
+// ─── Claude API 번역 ──────────────────────────────────────
 async function translateToEnglish(text) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" }
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: `Translate the following Korean Slack message to natural English.
+Return ONLY the translated text with no explanation or preamble.
+
+Korean: ${text}`,
+      }],
+    }),
   });
   const data = await res.json();
-  // 응답 형식: [[[번역문, 원문, ...], ...], ...]
-  const translated = data[0]?.map(item => item[0]).join("") || "(Translation failed)";
-  return translated;
+  return data.content?.[0]?.text?.trim() || "(Translation failed)";
 }
 
 // ─── Slack 스레드에 번역 게시 ─────────────────────────────
