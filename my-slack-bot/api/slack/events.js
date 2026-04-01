@@ -28,31 +28,29 @@ export default async function handler(req, res) {
     return res.status(403).send("Invalid signature");
   }
 
-  // 4) 즉시 200 응답 (Slack 3초 제한 대응) ← 핵심!
-  res.status(200).end();
-
-  // 5) 응답 후 번역 작업 실행 (Vercel waitUntil 사용)
+  // 4) 이벤트 처리 및 번역 (응답 전에 완료)
   const event = body.event;
-  if (!event) return;
+  if (!event) return res.status(200).end();
 
   if (
     event.type !== "message" ||
     event.subtype ||
     event.bot_id ||
     event.user === BOT_USER_ID
-  ) return;
+  ) return res.status(200).end();
 
   const text = event.text || "";
   const hasKorean = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/.test(text);
-  if (!hasKorean) return;
+  if (!hasKorean) return res.status(200).end();
 
-  // 번역 작업 실행 (완료까지 대기)
+  // 번역 완료 후 200 응답
   try {
     const translated = await translateToEnglish(text);
     await postTranslation(event.channel, event.ts, translated);
   } catch (err) {
     console.error("번역 오류:", err);
   }
+  return res.status(200).end();
 }
 
 // ─── Claude API 번역 ──────────────────────────────────────
