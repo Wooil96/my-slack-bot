@@ -34,7 +34,7 @@ export default async function handler(req, res) {
 
   if (
     event.type !== "message" ||
-    event.subtype ||
+    (event.subtype && event.subtype !== "file_share") || // 이미지 첨부는 허용
     event.bot_id ||
     event.user === BOT_USER_ID
   ) return res.status(200).end();
