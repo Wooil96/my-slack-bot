@@ -75,6 +75,7 @@ Korean: ${text}`,
       }
     );
     const data = await res.json();
+    console.log("Gemini 응답:", JSON.stringify(data));
     return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "(Translation failed)";
   } catch (err) {
     if (retry) {
