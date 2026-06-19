@@ -23,6 +23,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ challenge: body.challenge });
   }
 
+  // Slack 재시도 요청은 무시 (중복 번역 방지)
+  if (req.headers["x-slack-retry-num"]) {
+    return res.status(200).end();
+  }
+
   // 3) Slack 서명 검증 (일반 이벤트에만 적용)
   if (!verifySignature(req.headers, rawBody)) {
     return res.status(403).send("Invalid signature");
