@@ -3,7 +3,7 @@ import crypto from "crypto";
 
 const SLACK_BOT_TOKEN      = process.env.SLACK_BOT_TOKEN;
 const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
-// Google Translate는 API 키 불필요!
+const GEMINI_API_KEY       = process.env.GEMINI_API_KEY;
 const BOT_USER_ID          = process.env.BOT_USER_ID;
 
 export const config = {
@@ -54,14 +54,35 @@ export default async function handler(req, res) {
 }
 
 // ─── Google Translate (무료, API 키 불필요) ───────────────
-async function translateToEnglish(text) {
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" }
-  });
-  const data = await res.json();
-  const translated = data[0]?.map(item => item[0]).join("") || "(Translation failed)";
-  return translated;
+// ─── Gemini API 번역 ──────────────────────────────────────
+async function translateToEnglish(text, retry = true) {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Translate the following Korean Slack message to natural English.
+Return ONLY the translated text with no explanation or preamble.
+
+Korean: ${text}`,
+            }],
+          }],
+        }),
+      }
+    );
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "(Translation failed)";
+  } catch (err) {
+    if (retry) {
+      await new Promise(r => setTimeout(r, 1000));
+      return translateToEnglish(text, false);
+    }
+    return "(Translation failed - please try again)";
+  }
 }
 
 // ─── Slack 스레드에 번역 게시 ─────────────────────────────
