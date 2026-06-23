@@ -58,9 +58,10 @@ export default async function handler(req, res) {
   return res.status(200).end();
 }
 
-// ─── Google Translate (무료, API 키 불필요) ───────────────
 // ─── Gemini API 번역 ──────────────────────────────────────
-async function translateToEnglish(text, retry = true) {
+// ─── Gemini API 번역 (503 등 일시적 오류 재시도) ──────────
+async function translateToEnglish(text, attempt = 1) {
+  const MAX_ATTEMPTS = 4;
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -80,12 +81,24 @@ Korean: ${text}`,
       }
     );
     const data = await res.json();
-    console.log("Gemini 응답:", JSON.stringify(data));
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "(Translation failed)";
+
+    const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (result) return result;
+
+    const code = data.error?.code;
+    if ((code === 503 || code === 429 || code === 500) && attempt < MAX_ATTEMPTS) {
+      const wait = attempt * 2000;
+      console.log(`Gemini ${code} - ${attempt}번째 재시도, ${wait}ms 대기`);
+      await new Promise(r => setTimeout(r, wait));
+      return translateToEnglish(text, attempt + 1);
+    }
+
+    console.error("번역 오류:", JSON.stringify(data));
+    return "(Translation failed)";
   } catch (err) {
-    if (retry) {
-      await new Promise(r => setTimeout(r, 1000));
-      return translateToEnglish(text, false);
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, attempt * 2000));
+      return translateToEnglish(text, attempt + 1);
     }
     return "(Translation failed - please try again)";
   }
